@@ -1,0 +1,115 @@
+import google.generativeai as genai
+from youtube_transcript_api import YouTubeTranscriptApi
+import re
+
+# Configure sua API key
+GOOGLE_API_KEY = "AIzaSyADvjJQa3xhul9dfhByJKxiYtyN-e0Bh3c"
+genai.configure(api_key=GOOGLE_API_KEY)
+
+def extrair_id_video(url):
+    """Extrai o ID do vídeo da URL do YouTube."""
+    padrao = r'(?:v=|\/)([0-9A-Za-z_-]{11}).*'
+    match = re.search(padrao, url)
+    return match.group(1) if match else None
+
+def obter_transcricao(video_id):
+
+    try:
+        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['pt', 'en'])
+        return ' '.join([entrada['text'] for entrada in transcript])
+    except Exception as e:
+        return f"Erro ao obter transcrição: {str(e)}"
+
+def gerar_resumo(texto):
+
+    modelo = genai.GenerativeModel('gemini-pro')
+    prompt = f"""
+    Por favor, faça um resumo detalhado do seguinte texto, destacando os pontos principais:
+    {texto}
+    
+    O resumo deve incluir:
+    1. Principais tópicos abordados
+    2. Pontos-chave de cada tópico
+    3. Conclusões importantes
+    """
+    
+    try:
+        resposta = modelo.generate_content(prompt)
+        return resposta.text
+    except Exception as e:
+        return f"Erro ao gerar resumo: {str(e)}"
+
+def conversar_sobre_video(transcricao):
+    """Permite fazer perguntas sobre o conteúdo do vídeo."""
+    modelo = genai.GenerativeModel('gemini-pro')
+    
+    # Cria um histórico de chat
+    historico = [
+        {"role": "system", "parts": [f"Contexto do vídeo: {transcricao}"]},
+        {"role": "user", "parts": ["Você é um assistente que responde perguntas sobre este vídeo. Você deve usar apenas as informações contidas na transcrição fornecida."]}
+    ]
+    
+    print("\nModo de conversação ativado!")
+    print("Digite 'sair' para encerrar a conversa")
+    
+    while True:
+        pergunta = input("\nSua pergunta sobre o vídeo: ")
+        
+        if pergunta.lower() == 'sair':
+            break
+        
+        prompt = f"""
+        Com base na transcrição do vídeo fornecida, responda à seguinte pergunta:
+        {pergunta}
+        
+        Use apenas informações contidas na transcrição do vídeo.
+        """
+        
+        try:
+            resposta = modelo.generate_content(prompt)
+            print("\nResposta:", resposta.text)
+        except Exception as e:
+            print(f"Erro ao gerar resposta: {str(e)}")
+
+def main():
+    while True:
+        # Menu principal
+        print("\n=== Menu Principal ===")
+        print("1. Gerar resumo de um vídeo")
+        print("2. Conversar sobre um vídeo")
+        print("3. Sair")
+        
+        opcao = input("\nEscolha uma opção (1-3): ")
+        
+        if opcao == "3":
+            print("Até logo!")
+            break
+            
+        # URL do vídeo do YouTube
+        url = input("Digite a URL do vídeo do YouTube: ")
+        
+        # Extrai o ID do vídeo
+        video_id = extrair_id_video(url)
+        if not video_id:
+            print("URL inválida!")
+            continue
+        
+        # Obtém a transcrição
+        print("Obtendo transcrição...")
+        transcricao = obter_transcricao(video_id)
+        
+        if opcao == "1":
+            # Gera o resumo
+            print("Gerando resumo...")
+            resumo = gerar_resumo(transcricao)
+            
+            print("\nResumo do vídeo:")
+            print("=" * 50)
+            print(resumo)
+            
+        elif opcao == "2":
+            # Modo de conversação
+            conversar_sobre_video(transcricao)
+
+if __name__ == "__main__":
+    main()
